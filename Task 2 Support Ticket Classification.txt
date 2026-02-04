@@ -1,0 +1,118 @@
+import pandas as pd
+import re
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report
+
+# 1. SAMPLE SUPPORT TICKET DATA
+
+data = {
+    "text": [
+        "My internet is not working since morning",
+        "I was charged twice for my subscription",
+        "How do I reset my password?",
+        "I want to upgrade my plan",
+        "My app crashes when I open it",
+        "Refund not received yet",
+        "Unable to login to my account",
+        "What are your working hours?",
+        "Payment failed but money deducted",
+        "Email notifications not coming"
+    ],
+    "category": [
+        "Technical Issue", "Billing", "Account", "General Query",
+        "Technical Issue", "Billing", "Account", "General Query",
+        "Billing", "Technical Issue"
+    ],
+    "priority": [
+        "High", "High", "Medium", "Low",
+        "High", "Medium", "High", "Low",
+        "High", "Medium"
+    ]
+}
+
+df = pd.DataFrame(data)
+
+# =============================
+# 2. TEXT CLEANING FUNCTION
+# =============================
+def clean_text(text):
+    text = text.lower()
+    text = re.sub(r"[^a-z ]", "", text)
+    return text
+
+df["clean_text"] = df["text"].apply(clean_text)
+
+# =============================
+# 3. TRAIN / TEST SPLIT
+# =============================
+X = df["clean_text"]
+y_category = df["category"]
+y_priority = df["priority"]
+
+X_train, X_test, y_cat_train, y_cat_test, y_pri_train, y_pri_test = train_test_split(
+    X,
+    y_category,
+    y_priority,
+    test_size=0.2,
+    random_state=42
+)
+
+# =============================
+# 4. TEXT → NUMBERS (TF-IDF)
+# =============================
+vectorizer = TfidfVectorizer(stop_words="english")
+X_train_vec = vectorizer.fit_transform(X_train)
+X_test_vec = vectorizer.transform(X_test)
+
+# =============================
+# 5. MODEL TRAINING
+# =============================
+category_model = LogisticRegression(
+    max_iter=1000,
+    class_weight="balanced",
+    random_state=42
+)
+
+priority_model = LogisticRegression(
+    max_iter=1000,
+    class_weight="balanced",
+    random_state=42
+)
+
+category_model.fit(X_train_vec, y_cat_train)
+priority_model.fit(X_train_vec, y_pri_train)
+
+# =============================
+# 6. EVALUATION
+# =============================
+print("\nCATEGORY CLASSIFICATION REPORT")
+print(classification_report(y_cat_test, category_model.predict(X_test_vec)))
+
+print("\nPRIORITY CLASSIFICATION REPORT")
+print(classification_report(y_pri_test, priority_model.predict(X_test_vec)))
+
+# =============================
+# 7. REAL-TIME PREDICTION
+# =============================
+def predict_ticket(ticket_text):
+    cleaned = clean_text(ticket_text)
+    vec = vectorizer.transform([cleaned])
+    category = category_model.predict(vec)[0]
+    priority = priority_model.predict(vec)[0]
+    return category, priority
+
+# Example predictions
+test_tickets = [
+    "Payment failed but amount deducted",
+    "Application crashes after update",
+    "How can I change my password?"
+]
+
+print("\n--- PREDICTIONS ---")
+for ticket in test_tickets:
+    cat, pri = predict_ticket(ticket)
+    print(f"\nTicket: {ticket}")
+    print(f"Predicted Category: {cat}")
+    print(f"Predicted Priority: {pri}")
